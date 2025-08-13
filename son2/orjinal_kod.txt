@@ -1,0 +1,126 @@
+/*
+JOYSTIC PINLERI
+Gnd
+Vcc
+Vrx : x ekseni (sağ-sol) output
+Vry : y ekseni (ileri-geri) output
+SW : D2 (opsiyonel) joystick butona basılınca low sinyali gönderir
+
+
+*/
+#define JOYX A0   // Vrx
+#define JOYY A1   // Vry
+
+float hassasiyet = 0.7;
+
+const int maxPWM = 255;
+
+// Motor yapı tanımı
+struct MotorPins {
+  int pwmSol = 5; // D5
+  int pwmSag = 6; // D6
+  int solIleri = 7; // D7
+  int solGeri = 8; // D8
+  int sagIleri = 9 // D9
+  int sagGeri = 10; // D10
+};
+
+// dc motor pinlerini buraya yaz
+MotorPins motor = {
+  .pwmSol = 5,
+  .pwmSag = 6,
+  .solIleri = 7,
+  .solGeri = 8,
+  .sagIleri = 9,
+  .sagGeri = 10
+};
+
+// Pinleri ayarla
+void setup() {
+  pinMode(motor.pwmSol, OUTPUT);
+  pinMode(motor.pwmSag, OUTPUT);
+  pinMode(motor.solIleri, OUTPUT);
+  pinMode(motor.solGeri, OUTPUT);
+  pinMode(motor.sagIleri, OUTPUT);
+  pinMode(motor.sagGeri, OUTPUT);
+}
+
+void loop() {
+  kontrolEt();
+}
+
+// PWM değerlerine göre hareket kontrolü
+void kontrolEt() {
+  int joyXraw = analogRead(JOYX);
+  int joyYraw = analogRead(JOYY);
+
+  int xMapped = map(joyXraw, 0, 1023, -maxPWM, maxPWM);
+  int yMapped = map(joyYraw, 0, 1023, -maxPWM, maxPWM);
+
+  // HASSASİYET KONTROLÜ (deadzone)
+  if (abs(xMapped) < (maxPWM * hassasiyet)) {
+    xMapped = 0;
+  }
+  if (abs(yMapped) < (maxPWM * hassasiyet)) {
+    yMapped = 0;
+  }
+
+  joystickKontrol(yMapped, xMapped);
+}
+
+
+// Ana kontrol
+void joystickKontrol(int ileriGeriPWM, int donusPWM) {
+    if (ileriGeriPWM == 0 && donusPWM != 0) 
+    {
+        // Yerinde yön değiştirme
+        if (donusPWM > 0) {
+            // Sağa dön
+            motorYonuAyarla(&motor, 1, -1);
+        } 
+        else 
+        {
+            // Sola dön
+            motorYonuAyarla(&motor, -1, 1);
+        }
+        analogWrite(motor.pwmSol, (int)abs(donusPWM)*(motor->pwmSol)/2);
+        analogWrite(motor.pwmSag, (int)abs(donusPWM)*(motor->pwmSag)/2);
+    } 
+    else 
+    {
+        int basePWM = ileriGeri(&motor, ileriGeriPWM);
+        yonBelirle(&motor, basePWM, donusPWM);
+    }
+}
+
+// İleri-geri yönü belirle
+int ileriGeri(MotorPins* m, int hiz) {
+    if (hiz > 0) {
+        motorYonuAyarla(m, 1, 1); // Her iki motor ileri
+    } else if (hiz < 0) {
+        motorYonuAyarla(m, -1, -1); // Her iki motor geri
+    } else {
+        motorYonuAyarla(m, 0, 0); // Dur
+    }
+    return abs(hiz);
+}
+
+// Dönüş hızlarını ayarla
+void yonBelirle(MotorPins* m, int basePWM, int donusFarki) {
+  int solPWM = constrain(basePWM - donusFarki, 0, maxPWM);
+  int sagPWM = constrain(basePWM + donusFarki, 0, maxPWM);
+
+  analogWrite(m->pwmSol, solPWM);
+  analogWrite(m->pwmSag, sagPWM);
+}
+
+// Motor yönü ver: -1 geri, 1 ileri, 0 dur
+void motorYonuAyarla(MotorPins* m, int solYon, int sagYon) {
+  // Sol motor yönü
+  digitalWrite(m->solIleri, solYon == 1);
+  digitalWrite(m->solGeri,  solYon == -1);
+
+  // Sağ motor yönü
+  digitalWrite(m->sagIleri, sagYon == 1);
+  digitalWrite(m->sagGeri,  sagYon == -1);
+}
