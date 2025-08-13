@@ -258,47 +258,35 @@ class RobotSimulasyonu:
         self.debug_mesaj = f"Serbest Açı: {aci:.1f}°"
         return aci  # Orijinal açıyı döndür
     
-    def ultraHizliDonus(self, yaricap, hedef_aci):
-        """Ultra hızlı dönüş - Polar koordinat sistemi ile"""
-        aciFarki = self.hesaplaAciFarki(hedef_aci, self.robotAci)
-        mutlakFark = abs(aciFarki)
-        
-        if mutlakFark > self.DONUS_HASSASIYETI:
-            # Dönüş gerekli
-            if aciFarki > 0:
-                self.sol_motor_yon = 1
-                self.sag_motor_yon = -1
-            else:
-                self.sol_motor_yon = -1
-                self.sag_motor_yon = 1
-            
-            # Dönüş hızı: Yarıçap + açı farkına göre
-            donus_hizi = min(255, yaricap + (mutlakFark * 2))
-            self.sol_motor_pwm = donus_hizi
-            self.sag_motor_pwm = donus_hizi
-            
-            # Simülasyon açısını güncelle
-            donus_hizi_aci = 60.0 if aciFarki > 0 else -60.0  # Daha hızlı dönüş
-            self.simulasyonAci += donus_hizi_aci / 60.0  # 60 FPS için böl
-            if self.simulasyonAci >= 360:
-                self.simulasyonAci -= 360
-            if self.simulasyonAci < 0:
-                self.simulasyonAci += 360
-                
+    def polar_differential_control(self, yaricap, hedef_aci):
+        """Kutupsal koordinatlardan diferansiyel tekerlek hızlarını hesapla."""
+        theta_rad = math.radians(hedef_aci)
+        # İleri/geri bileşen (cosine) ve dönüş bileşeni (sine)
+        ileri = (yaricap / self.MAX_HAREKET_HIZI) * math.cos(theta_rad)
+        donus = (yaricap / self.MAX_HAREKET_HIZI) * math.sin(theta_rad)
+
+        # Ham sol/sağ hız değerleri [-1, 1] aralığında
+        sol_hiz = ileri + donus
+        sag_hiz = ileri - donus
+
+        # Normalizasyon
+        max_deger = max(abs(sol_hiz), abs(sag_hiz), 1.0)
+        sol_hiz /= max_deger
+        sag_hiz /= max_deger
+
+        # PWM değerlerine çevir
+        sol_pwm = int(abs(sol_hiz) * self.MAX_HAREKET_HIZI)
+        sag_pwm = int(abs(sag_hiz) * self.MAX_HAREKET_HIZI)
+
+        self.sol_motor_yon = 1 if sol_hiz >= 0 else -1
+        self.sag_motor_yon = 1 if sag_hiz >= 0 else -1
+        self.sol_motor_pwm = sol_pwm
+        self.sag_motor_pwm = sag_pwm
+
+        if yaricap > 0:
+            self.odometri_hareket_et()
         else:
-            # Düz hareket - yarıçap hızını kullan
-            if yaricap > 0:
-                self.sol_motor_yon = 1
-                self.sag_motor_yon = 1
-                
-                # Yarıçap doğrudan PWM değeri olarak kullan
-                pwm = int(yaricap)
-                self.sol_motor_pwm = pwm
-                self.sag_motor_pwm = pwm
-                
-                self.odometri_hareket_et()
-            else:
-                self.motorlariDurdur()
+            self.motorlariDurdur()
     
     def orijinalKontrol(self, joy_x, joy_y):
         """Orijinal kontrol - Arduino ile TAM AYNI"""
@@ -413,8 +401,8 @@ class RobotSimulasyonu:
                     self.hedefAci = aci
                 
                 if self.hedefAci >= 0:
-                    # Yarıçap ve hedef açıyı kullanarak kontrol
-                    self.ultraHizliDonus(yaricap, self.hedefAci)
+                    # Yarıçap ve hedef açıyı kullanarak diferansiyel kontrol
+                    self.polar_differential_control(yaricap, self.hedefAci)
                     
                     # Debug mesajını güncelle
                     self.debug_mesaj = f"Polar: R={yaricap:.0f}, θ={self.hedefAci:.1f}°"
