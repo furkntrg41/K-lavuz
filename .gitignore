@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# Arduino build
+*.elf
+*.hex
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+*.mkv
+*.mp4
